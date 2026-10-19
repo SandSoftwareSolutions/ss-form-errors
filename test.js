@@ -68,3 +68,27 @@ test("helpers", () => {
   assert.equal(hasErrors({ fields: {}, form: [] }), false);
   assert.deepEqual(foldUnknownFields(r, ["a"]), { fields: { a: ["x"] }, form: ["items.3.name: y"] });
 });
+
+test("field names that exist on Object.prototype are ordinary fields (no TypeError, no pollution)", () => {
+  const result = toFieldErrors({ errors: [{ path: "constructor", message: "a" }, { path: "__proto__", message: "b" }, { path: "toString", message: "c" }, { path: "hasOwnProperty", message: "c" }] });
+  assert.deepEqual(Object.getOwnPropertyNames(result.fields).sort(), ["__proto__", "constructor", "hasOwnProperty", "toString"]);
+  assert.equal(Object.getPrototypeOf(result.fields), Object.prototype);
+  assert.equal(firstError(result, "constructor"), "a");
+  assert.equal(firstError(result, "__proto__"), "b");
+  assert.equal(firstError({ fields: {} }, "constructor"), undefined);
+  assert.equal(({}).a, undefined);
+  const folded = foldUnknownFields(result, ["__proto__", "constructor"]);
+  assert.equal(Object.getPrototypeOf(folded.fields), Object.prototype);
+  assert.deepEqual(folded.form, ["toString: c", "hasOwnProperty: c"]);
+});
+
+test("{ error: 'text' } shows the text instead of the fallback", () => {
+  assert.deepEqual(toFieldErrors({ error: "Invalid token" }), { fields: {}, form: ["Invalid token"] });
+});
+
+test("JSON Pointer escapes (~1, ~0) and URI fragment escapes (%20) are decoded; broken % stays", () => {
+  assert.equal(normalizePath("/a~1b/c~0d"), "a/b.c~d");
+  assert.equal(normalizePath("#/a%20b/c"), "a b.c");
+  assert.equal(normalizePath("#/a%zz/100%"), "a%zz.100%");
+  assert.equal(normalizePath("/a%20b"), "a%20b");
+});

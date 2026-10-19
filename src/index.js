@@ -4,6 +4,25 @@
 export function normalizePath(path) {
   if (Array.isArray(path)) return path.map(String).join(".");
   if (typeof path !== "string") return "";
+  if (/^#?\//.test(path)) {
+    // A JSON Pointer (RFC 6901), or its URI fragment form "#/a%20b": decode %xx (a broken escape stays as it is), then ~1 and ~0.
+    const fragment = path.startsWith("#");
+    return path
+      .replace(/^#/, "")
+      .slice(1)
+      .split("/")
+      .map((segment) => {
+        if (fragment) {
+          try {
+            segment = decodeURIComponent(segment);
+          } catch {
+            // not valid percent-encoding: keep the text as it came
+          }
+        }
+        return segment.replace(/~1/g, "/").replace(/~0/g, "~");
+      })
+      .join(".");
+  }
   return path
     .replace(/^#?\/?/, "")
     .replace(/^\$\.?/, "")
@@ -18,7 +37,12 @@ const text = (v) => (typeof v === "string" && v.trim() !== "" ? v : undefined);
 
 function add(result, path, message) {
   if (!message) return;
-  const list = path ? (result.fields[path] ??= []) : result.form;
+  let list = result.form;
+  if (path) {
+    // own properties only: a field called "constructor" or "__proto__" must not find something on Object.prototype
+    if (!Object.hasOwn(result.fields, path)) Object.defineProperty(result.fields, path, { value: [], enumerable: true, writable: true, configurable: true });
+    list = result.fields[path];
+  }
   if (!list.includes(message)) list.push(message);
 }
 
@@ -68,7 +92,7 @@ export function toFieldErrors(input, options = {}) {
       }
     }
     if (!found || (result.form.length === 0 && Object.keys(result.fields).length === 0)) {
-      addItem(result, { message: text(source.detail) ?? text(source.message) ?? text(source.title), code: source.code }, opts);
+      addItem(result, { message: text(source.detail) ?? text(source.message) ?? text(source.error) ?? text(source.title), code: source.code }, opts);
     } else if (text(source.detail) && Object.keys(result.fields).length === 0 && result.form.length === 0) {
       add(result, "", source.detail);
     }
@@ -78,7 +102,7 @@ export function toFieldErrors(input, options = {}) {
 }
 
 /** The first message of a field, or `undefined`. */
-export const firstError = (result, field) => result.fields[field]?.[0];
+export const firstError = (result, field) => (Object.hasOwn(result.fields, field) ? result.fields[field][0] : undefined);
 
 /** Whether there is anything to show. */
 export const hasErrors = (result) => result.form.length > 0 || Object.keys(result.fields).length > 0;
@@ -90,7 +114,7 @@ export const hasErrors = (result) => result.form.length > 0 || Object.keys(resul
 export function foldUnknownFields(result, known) {
   const out = { fields: {}, form: [...result.form] };
   for (const [path, messages] of Object.entries(result.fields)) {
-    if (known.includes(path)) out.fields[path] = [...messages];
+    if (known.includes(path)) Object.defineProperty(out.fields, path, { value: [...messages], enumerable: true, writable: true, configurable: true });
     else for (const m of messages) add(out, "", `${path}: ${m}`);
   }
   return out;

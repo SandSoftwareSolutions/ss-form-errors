@@ -33,7 +33,9 @@ Anything goes in and a result always comes out: a string, an `Error`, `null`, a 
 - Validator output with `issues` and path arrays (`["address", "street"]`)
 - A flattened `{ fieldErrors, formErrors }`
 - JSON:API: `errors[].source.pointer`
-- Paths as `/items/0/name`, `#/items/0/name`, `$.items[0].name` or arrays all become `items.0.name`
+- `{ error: "text" }` and `{ error: { message } }`
+- Paths as `/items/0/name`, `#/items/0/name`, `$.items[0].name` or arrays all become `items.0.name`. JSON Pointer escapes are decoded (`/a~1b` becomes `a/b`, and `#/a%20b` becomes `a b`; an invalid `%` escape is kept as written)
+- Field names such as `constructor` or `__proto__` are ordinary fields (stored as own properties)
 
 ## Translations
 
