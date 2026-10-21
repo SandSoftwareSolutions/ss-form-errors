@@ -10,6 +10,8 @@ APIs report validation errors in many shapes. Forms want one: which message belo
 npm install @sandsoftwaresolutions/form-errors
 ```
 
+Works with `import` and `require()`, and ships TypeScript types for both.
+
 ## Usage
 
 ```js
